@@ -1,23 +1,15 @@
-"""
-Reusable FastAPI dependencies.
 
-get_db is ready to use immediately.
+from datetime import datetime
+from typing import Generator, Optional
 
-get_current_user / require_customer / require_admin are the three
-dependencies named in IMPLEMENTATION_PLAN.md section 15. Their bodies are
-intentionally left as TODOs: wiring them up needs the User model and the
-auth endpoints (register/login), which belong to the `feature/auth`
-branch/prompt rather than the Phase 1 scaffolding step. Implement them
-together with app/api/v1/endpoints/auth.py.
-"""
-
-from typing import Generator
-
-from fastapi import Depends
+from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import decode_access_token
 from app.db.session import SessionLocal
+from app.models.user import User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -30,22 +22,59 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """
-    TODO (feature/auth):
-    1. Reject if token is missing -> 401.
-    2. Decode token with app.core.security.decode_access_token -> 401 if invalid/expired.
-    3. Load the User by id (token's "sub" claim) -> 401 if not found.
-    4. Return the User.
-    """
-    raise NotImplementedError("Implement get_current_user in the auth feature branch.")
+def _resolve_token(
+    authorization: Optional[str] = Depends(oauth2_scheme),
+    access_token: Optional[str] = Cookie(default=None, alias="access_token"),
+) -> Optional[str]:
+    if authorization is not None:
+        return authorization
+    if access_token is not None and access_token.startswith("Bearer "):
+        return access_token[7:]
+    return None
 
 
-def require_customer(current_user=Depends(get_current_user)):
-    """TODO (feature/auth): raise 403 unless current_user.role == CUSTOMER (or ADMIN, if admins should also act as customers)."""
-    raise NotImplementedError("Implement require_customer in the auth feature branch.")
+def get_current_user(
+    token: Optional[str] = Depends(_resolve_token),
+    db: Session = Depends(get_db),
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if token is None:
+        raise credentials_exception
+
+    payload = decode_access_token(token)
+    if payload is None:
+        raise credentials_exception
+
+    user_id: Optional[str] = payload.get("sub")
+    if user_id is None:
+        raise credentials_exception
+
+    stmt = select(User).where(User.id == user_id)
+    result = db.execute(stmt)
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise credentials_exception
+
+    return user
 
 
-def require_admin(current_user=Depends(get_current_user)):
-    """TODO (feature/auth): raise 403 unless current_user.role == ADMIN."""
-    raise NotImplementedError("Implement require_admin in the auth feature branch.")
+def require_customer(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in (UserRole.CUSTOMER, UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer access required",
+        )
+    return current_user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user

@@ -34,6 +34,43 @@ Then open:
 Stop with `Ctrl+C`, or `docker compose down` to also remove containers
 (add `-v` to also wipe the database volume).
 
+### First-run database initialization
+
+The first time you start the backend, create the database tables:
+
+```bash
+docker compose exec backend python -c "
+from app.db.base import Base
+from app.db.session import engine
+from app.models import user, category, product, order, order_item, store_settings
+Base.metadata.create_all(bind=engine)
+print('Tables created')
+"
+```
+
+### Creating an admin user
+
+Public registration only creates `CUSTOMER` accounts. To access admin endpoints,
+create an admin user with the seed script:
+
+```bash
+docker compose exec backend python scripts/seed.py
+```
+
+Default admin credentials:
+- Email: `admin@example.com`
+- Password: `admin123`
+
+### Accessing admin endpoints in Swagger UI
+
+1. Open `/docs`
+2. Call `POST /auth/login` with the admin credentials.
+   This sets an httpOnly cookie automatically.
+3. Call `GET /admin/customers` or other admin endpoints.
+   The cookie is sent automatically by the browser.
+
+If you see `401`, refresh `/docs` and log in again.
+
 ### Frontend API URL
 
 `frontend/.env.local` defaults to `http://backend:8000/api/v1` so the Next.js
@@ -86,7 +123,7 @@ backend/app/
   db/          - SQLAlchemy engine/session, declarative Base
   models/      - SQLAlchemy models
   schemas/     - Pydantic request/response schemas
-  api/v1/      - versioned routers (health check implemented, rest are stubs)
+  api/v1/      - versioned routers
   services/    - business logic
 frontend/
   app/         - Next.js App Router pages
@@ -96,29 +133,51 @@ frontend/
   types/       - shared TypeScript types
 ```
 
+## Implemented backend APIs
+
+The backend exposes the following `/api/v1` endpoints:
+
+- `GET /health` — health check
+- `POST /auth/register` — register a customer account
+- `POST /auth/login` — login and receive JWT + httpOnly cookie
+- `GET /auth/me` — get current authenticated user
+- `GET /categories` — list categories (public)
+- `GET /categories/{id}` — get category (public)
+- `POST /categories` — create category (admin)
+- `PUT /categories/{id}` — update category (admin)
+- `DELETE /categories/{id}` — delete category (admin, blocked if products exist)
+- `GET /products` — list products with search, filter, sort, pagination (public)
+- `GET /products/{id}` — get product (public)
+- `POST /products` — create product (admin)
+- `PUT /products/{id}` — update product (admin)
+- `DELETE /products/{id}` — delete product (admin)
+- `POST /orders` — create order with transactional stock protection (customer)
+- `GET /orders` — list own orders (customer)
+- `GET /orders/{id}` — get own order (customer)
+- `GET /admin/orders` — list all orders (admin)
+- `GET /admin/orders/{id}` — get any order (admin)
+- `PATCH /admin/orders/{id}/status` — update order status with state-machine validation (admin)
+- `PUT /admin/store/settings` — update store settings (admin)
+- `GET /store/settings` — get public store settings (public)
+
+## Key backend features
+
+- JWT authentication with httpOnly cookies
+- Role-based authorization (`CUSTOMER` / `ADMIN`)
+- Password hashing with bcrypt
+- Order creation with `FOR UPDATE` row-level locking to prevent overselling
+- Order status state machine with terminal states
+- Automatic stock restoration on cancellation
+- Store settings singleton with default fallback
+- WhatsApp number E.164 validation
+- Pagination with enforced bounds
+- Backend tests: 62 passing
+
 ## Current status
 
-Phase 1 (scaffolding) complete:
-- Docker Compose with PostgreSQL, FastAPI backend, and Next.js frontend
-- Environment configuration for Docker and local development
-- FastAPI app with CORS and `/api/v1/health` endpoint
-- Next.js app with Tailwind CSS, TypeScript, and Zustand
-- SQLAlchemy models for all entities with plan-complete field coverage:
-  - `User` (UUID PK, email unique, password_hash, CUSTOMER/ADMIN role)
-  - `Category` (name unique, description)
-  - `Product` (Numeric price, stock with CHECK constraints, category FK, is_featured)
-  - `Order` (status enum, shipping fields, **expires_at** for pending-order expiry)
-  - `OrderItem` (snapshots product price at purchase time)
-  - `StoreSettings` (**whatsapp_number** with E.164 validation, **singleton_key** unique constraint)
-- Alembic migrations configured; model registry fixed to avoid circular imports
-- Pydantic schemas implemented for `StoreSettings` and `Order` with validation
-- Backend tests pass (`pytest`): 12 tests covering model metadata and schema validation
-
-Everything under `TODO` comments — auth endpoints, product/category/order APIs,
-services, and all customer/admin UI — is intentionally unimplemented
-scaffolding. Follow `IMPLEMENTATION_PLAN.md` section 45 (Implementation
-Sequence) and section 43 (Git strategy) for what to build next and how to
-branch it.
+- Backend API specification and authentication API implemented
+- All backend tests pass (`pytest`: 62 passed)
+- Frontend UI remains to be built
 
 ## Git workflow
 
