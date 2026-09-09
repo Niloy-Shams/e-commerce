@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 
 from app.db.base import Base
@@ -23,6 +23,12 @@ class StoreSettings(Base):
     secondary_color = Column(String, nullable=False, default="#FFFFFF")
     contact_email = Column(String, nullable=True)
     contact_phone = Column(String, nullable=True)
+    whatsapp_number = Column(String, nullable=False)
     address = Column(Text, nullable=True)
+    singleton_key = Column(String, nullable=False, unique=True, default="default")
 
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("singleton_key", name="uq_store_settings_singleton_key"),
+    )
