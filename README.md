@@ -48,28 +48,36 @@ print('Tables created')
 "
 ```
 
-### Creating an admin user
+### Seeding sample data
 
-Public registration only creates `CUSTOMER` accounts. To access admin endpoints,
-create an admin user with the seed script:
+To populate the database with sample categories, products, store settings, orders,
+and test users, run:
 
 ```bash
 docker compose exec backend python scripts/seed.py
 ```
 
-Default admin credentials:
-- Email: `admin@example.com`
-- Password: `admin123`
+This creates:
+- 1 admin user: `admin@example.com` / `admin123`
+- 1 customer user: `customer@example.com` / `password123`
+- 5 categories
+- 13 products
+- Store settings
+- 3 sample orders for the customer
 
-### Accessing admin endpoints in Swagger UI
+### Testing APIs in Swagger UI
 
-1. Open `/docs`
-2. Call `POST /auth/login` with the admin credentials.
-   This sets an httpOnly cookie automatically.
-3. Call `GET /admin/customers` or other admin endpoints.
-   The cookie is sent automatically by the browser.
+1. Open `/docs` in your browser.
+2. If you get `401` or `403`, call `GET /auth/csrf` first to obtain a CSRF token.
+3. Use `POST /auth/login` with the desired credentials.
+   - The response sets an httpOnly cookie automatically.
+4. For state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`), include the CSRF token
+   from step 2 in the `X-CSRF-Token` header.
+5. Browse and test the available endpoints.
 
-If you see `401`, refresh `/docs` and log in again.
+If cookies are not persisted between requests in Swagger UI:
+- Use the **Authorize** button and enter `Bearer <access_token>` manually.
+- Or use a browser extension to copy cookies between requests.
 
 ### Frontend API URL
 
