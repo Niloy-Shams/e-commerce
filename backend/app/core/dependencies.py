@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Generator, Optional
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -78,3 +78,19 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="Admin access required",
         )
     return current_user
+
+
+def validate_csrf_token(
+    x_csrf_token: Optional[str] = Header(default=None, alias="X-CSRF-Token"),
+    csrf_token: Optional[str] = Cookie(default=None, alias="csrf_token"),
+) -> None:
+    if x_csrf_token is None or csrf_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token missing",
+        )
+    if x_csrf_token != csrf_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token mismatch",
+        )

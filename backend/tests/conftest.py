@@ -172,24 +172,32 @@ def order(db_session, customer, product):
 
 @pytest.fixture()
 def auth_headers_customer(client, customer):
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
     response = client.post(
         "/api/v1/auth/login",
         json={"email": customer.email, "password": "password123"},
+        headers={"X-CSRF-Token": csrf_token},
     )
     assert response.status_code == 200
     token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    new_csrf = response.cookies.get("csrf_token", csrf_token)
+    return {"Authorization": f"Bearer {token}", "X-CSRF-Token": new_csrf}
 
 
 @pytest.fixture()
 def auth_headers_admin(client, admin):
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
     response = client.post(
         "/api/v1/auth/login",
         json={"email": admin.email, "password": "admin123"},
+        headers={"X-CSRF-Token": csrf_token},
     )
     assert response.status_code == 200
     token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    new_csrf = response.cookies.get("csrf_token", csrf_token)
+    return {"Authorization": f"Bearer {token}", "X-CSRF-Token": new_csrf}
 
 
 @pytest.fixture()

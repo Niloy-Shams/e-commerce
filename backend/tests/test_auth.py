@@ -6,8 +6,10 @@ from app.schemas.auth import RegisterRequest
 
 
 def test_register_creates_customer(client, db_session):
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
     payload = RegisterRequest(name="New User", email="newuser@example.com", password="securepass")
-    response = client.post("/api/v1/auth/register", json=payload.model_dump())
+    response = client.post("/api/v1/auth/register", json=payload.model_dump(), headers={"X-CSRF-Token": csrf_token})
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
     assert data["user"]["email"] == "newuser@example.com"
@@ -18,17 +20,24 @@ def test_register_creates_customer(client, db_session):
 
 
 def test_register_duplicate_email_returns_400(client):
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
     payload = RegisterRequest(name="User", email="dup@example.com", password="pass123")
-    client.post("/api/v1/auth/register", json=payload.model_dump())
-    response = client.post("/api/v1/auth/register", json=payload.model_dump())
+    client.post("/api/v1/auth/register", json=payload.model_dump(), headers={"X-CSRF-Token": csrf_token})
+    csrf_resp2 = client.get("/api/v1/auth/csrf")
+    csrf_token2 = csrf_resp2.json()["csrf_token"]
+    response = client.post("/api/v1/auth/register", json=payload.model_dump(), headers={"X-CSRF-Token": csrf_token2})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "already" in response.json()["detail"].lower()
 
 
 def test_login_returns_token(client, customer):
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
     response = client.post(
         "/api/v1/auth/login",
         json={"email": customer.email, "password": "password123"},
+        headers={"X-CSRF-Token": csrf_token},
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -37,9 +46,12 @@ def test_login_returns_token(client, customer):
 
 
 def test_login_wrong_password_returns_401(client, customer):
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
     response = client.post(
         "/api/v1/auth/login",
         json={"email": customer.email, "password": "wrongpassword"},
+        headers={"X-CSRF-Token": csrf_token},
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 

@@ -5,7 +5,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Cookie, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, require_customer
+from app.api.deps import get_current_user, get_db, require_customer, validate_csrf_token
 from app.core.security import create_access_token
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserPublic
 from app.schemas.user import UserPublic as DetailedUserPublic
@@ -33,11 +33,32 @@ def _set_auth_cookie(response: Response, token: str) -> None:
     )
 
 
+def _set_csrf_cookie(response: Response) -> str:
+    import secrets
+
+    token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="csrf_token",
+        value=token,
+        httponly=False,
+        samesite="strict",
+        max_age=60 * 60 * 24 * 7,
+    )
+    return token
+
+
+@router.get("/csrf")
+def get_csrf_token(response: Response):
+    token = _set_csrf_cookie(response)
+    return {"csrf_token": token}
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(
     payload: RegisterRequest,
     response: Response,
     db: Session = Depends(get_db),
+    _=Depends(validate_csrf_token),
 ):
     try:
         user = auth_service.register_user(
@@ -51,6 +72,7 @@ def register(
 
     token = create_access_token(subject=str(user.id))
     _set_auth_cookie(response, token)
+    _set_csrf_cookie(response)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -63,6 +85,7 @@ def login(
     payload: LoginRequest,
     response: Response,
     db: Session = Depends(get_db),
+    _=Depends(validate_csrf_token),
 ):
     user = auth_service.authenticate_user(db, payload.email, payload.password)
     if user is None:
@@ -73,6 +96,7 @@ def login(
 
     token = create_access_token(subject=str(user.id))
     _set_auth_cookie(response, token)
+    _set_csrf_cookie(response)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -81,8 +105,9 @@ def login(
 
 
 @router.post("/logout")
-def logout(response: Response):
+def logout(response: Response, _=Depends(validate_csrf_token)):
     response.delete_cookie(key="access_token")
+    response.delete_cookie(key="csrf_token")
     return {"detail": "Logged out"}
 
 

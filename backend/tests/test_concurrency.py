@@ -18,13 +18,23 @@ async def test_concurrent_order_creation_only_one_succeeds(client, customer, pro
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        csrf_resp = await ac.get("/api/v1/auth/csrf")
+        assert csrf_resp.status_code == 200
+        csrf_token = csrf_resp.json()["csrf_token"]
+
         login_resp = await ac.post(
             "/api/v1/auth/login",
             json={"email": "customer@example.com", "password": "password123"},
+            headers={"X-CSRF-Token": csrf_token},
         )
         assert login_resp.status_code == 200
         token = login_resp.json()["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
+        new_csrf = login_resp.cookies.get("csrf_token", csrf_token)
+
+        order_headers = {
+            "Authorization": f"Bearer {token}",
+            "X-CSRF-Token": new_csrf,
+        }
 
         payload = {
             "items": [{"product_id": product.id, "quantity": 1}],
@@ -34,8 +44,8 @@ async def test_concurrent_order_creation_only_one_succeeds(client, customer, pro
         }
 
         responses = await asyncio.gather(
-            ac.post("/api/v1/orders", json=payload, headers=headers),
-            ac.post("/api/v1/orders", json=payload, headers=headers),
+            ac.post("/api/v1/orders", json=payload, headers=order_headers),
+            ac.post("/api/v1/orders", json=payload, headers=order_headers),
         )
 
     status_codes = sorted([r.status_code for r in responses])

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_admin, validate_csrf_token
 from app.models.category import Category
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
 
@@ -42,7 +42,7 @@ def get_category(category_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
-def create_category(payload: CategoryCreate, db: Session = Depends(get_db), _=Depends(require_admin)):
+def create_category(payload: CategoryCreate, db: Session = Depends(get_db), _=Depends(require_admin), __=Depends(validate_csrf_token)):
     stmt = select(Category).where(Category.name == payload.name)
     existing = db.execute(stmt).scalar_one_or_none()
     if existing is not None:
@@ -62,7 +62,7 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db), _=De
 
 
 @router.put("/{category_id}", response_model=CategoryOut)
-def update_category(category_id: int, payload: CategoryUpdate, db: Session = Depends(get_db), _=Depends(require_admin)):
+def update_category(category_id: int, payload: CategoryUpdate, db: Session = Depends(get_db), _=Depends(require_admin), __=Depends(validate_csrf_token)):
     stmt = select(Category).where(Category.id == category_id)
     category = db.execute(stmt).scalar_one_or_none()
     if category is None:
@@ -85,7 +85,7 @@ def update_category(category_id: int, payload: CategoryUpdate, db: Session = Dep
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_category(category_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+def delete_category(category_id: int, db: Session = Depends(get_db), _=Depends(require_admin), __=Depends(validate_csrf_token)):
     stmt = select(Category).where(Category.id == category_id)
     category = db.execute(stmt).scalar_one_or_none()
     if category is None:

@@ -157,12 +157,15 @@ The backend exposes the following `/api/v1` endpoints:
 - `GET /admin/orders` — list all orders (admin)
 - `GET /admin/orders/{id}` — get any order (admin)
 - `PATCH /admin/orders/{id}/status` — update order status with state-machine validation (admin)
+- `GET /admin/customers` — list all customers (admin)
+- `GET /admin/customers/{id}` — get customer details (admin)
 - `PUT /admin/store/settings` — update store settings (admin)
 - `GET /store/settings` — get public store settings (public)
 
 ## Key backend features
 
-- JWT authentication with httpOnly cookies
+- JWT authentication with httpOnly, SameSite=Strict cookies
+- CSRF protection via double-submit cookie pattern (`GET /auth/csrf` + `X-CSRF-Token` header)
 - Role-based authorization (`CUSTOMER` / `ADMIN`)
 - Password hashing with bcrypt
 - Order creation with `FOR UPDATE` row-level locking to prevent overselling
@@ -171,12 +174,48 @@ The backend exposes the following `/api/v1` endpoints:
 - Store settings singleton with default fallback
 - WhatsApp number E.164 validation
 - Pagination with enforced bounds
-- Backend tests: 62 passing
+- Backend tests: 67 passing
+
+## Authentication and authorization
+
+The backend uses **JWT tokens stored in httpOnly cookies** to avoid XSS risks from
+`localStorage`/`sessionStorage`.
+
+### Auth endpoints
+
+- `GET /auth/csrf` — fetch a CSRF token (sets a non-httponly `csrf_token` cookie)
+- `POST /auth/register` — register a `CUSTOMER` account
+- `POST /auth/login` — login and receive JWT + httpOnly cookie
+- `POST /auth/logout` — clear auth and CSRF cookies
+- `GET /auth/me` — get current authenticated user
+
+### CSRF flow
+
+1. Call `GET /auth/csrf` to obtain a CSRF token and cookie.
+2. Include the token in the `X-CSRF-Token` header for all state-changing requests
+   (`POST`, `PUT`, `PATCH`, `DELETE`).
+3. The backend validates that the header value matches the `csrf_token` cookie.
+
+### Authorization rules
+
+| Action | Guest | Customer | Admin |
+|---|---:|---:|---:|
+| Browse products | Yes | Yes | Yes |
+| Search products | Yes | Yes | Yes |
+| Place order | No | Yes | Yes |
+| View own orders | No | Yes | Yes |
+| Manage products | No | No | Yes |
+| Manage categories | No | No | Yes |
+| Manage orders | No | No | Yes |
+| Manage store settings | No | No | Yes |
+| View customers | No | No | Yes |
+
+Reusable backend dependencies: `get_current_user()`, `require_customer()`, `require_admin()`.
 
 ## Current status
 
-- Backend API specification and authentication API implemented
-- All backend tests pass (`pytest`: 62 passed)
+- Backend API specification, authentication, order, and admin APIs implemented
+- All backend tests pass (`pytest`: 67 passed)
 - Frontend UI remains to be built
 
 ## Git workflow

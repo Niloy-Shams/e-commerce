@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin, require_customer
+from app.api.deps import get_db, require_admin, require_customer, validate_csrf_token
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderItemIn, OrderItemOut, OrderOut, OrderStatusUpdate
 from app.services import order as order_service
@@ -16,6 +16,7 @@ def create_order(
     payload: OrderCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    _=Depends(validate_csrf_token),
 ):
     try:
         order = order_service.create_order(

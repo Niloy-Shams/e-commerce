@@ -1,9 +1,44 @@
 
+import uuid
+
 import pytest
 from fastapi import status
 
 from app.models.order import OrderStatus
 from app.schemas.store_settings import StoreSettingsUpdate
+
+
+def test_list_admin_customers_requires_admin(client, auth_headers_customer):
+    response = client.get("/api/v1/admin/customers", headers=auth_headers_customer)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_list_admin_customers_admin_success(client, auth_headers_admin, customer):
+    response = client.get("/api/v1/admin/customers", headers=auth_headers_admin)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) >= 1
+    emails = [u["email"] for u in data]
+    assert customer.email in emails
+
+
+def test_get_admin_customer_requires_admin(client, customer, auth_headers_customer):
+    response = client.get(f"/api/v1/admin/customers/{customer.id}", headers=auth_headers_customer)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_get_admin_customer_success(client, auth_headers_admin, customer):
+    response = client.get(f"/api/v1/admin/customers/{customer.id}", headers=auth_headers_admin)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["email"] == customer.email
+    assert data["name"] == customer.name
+
+
+def test_get_admin_customer_not_found(client, auth_headers_admin):
+    fake_id = str(uuid.uuid4())
+    response = client.get(f"/api/v1/admin/customers/{fake_id}", headers=auth_headers_admin)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 def test_list_admin_orders_requires_admin(client, order, auth_headers_customer):

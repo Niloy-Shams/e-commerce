@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_admin, validate_csrf_token
 from app.models.order import Order, OrderStatus
 from app.schemas.store_settings import StoreSettingsUpdate
 from app.services import order as order_service
@@ -62,6 +62,7 @@ def update_admin_order_status(
     payload: dict,
     db: Session = Depends(get_db),
     _=Depends(require_admin),
+    __=Depends(validate_csrf_token),
 ):
     new_status_str = payload.get("status")
     if new_status_str is None:
@@ -93,6 +94,7 @@ def update_store_settings(
     payload: StoreSettingsUpdate,
     db: Session = Depends(get_db),
     _=Depends(require_admin),
+    __=Depends(validate_csrf_token),
 ):
     data = payload.model_dump(exclude_none=True)
     settings = store_service.update_store_settings(db, **data)

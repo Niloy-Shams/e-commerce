@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_admin, validate_csrf_token
 from app.models.category import Category
 from app.schemas.category import CategoryOut
 from app.schemas.product import ProductCreate, ProductListResponse, ProductOut, ProductSort, ProductUpdate
@@ -80,7 +80,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
-def create_product(payload: ProductCreate, db: Session = Depends(get_db), _=Depends(require_admin)):
+def create_product(payload: ProductCreate, db: Session = Depends(get_db), _=Depends(require_admin), __=Depends(validate_csrf_token)):
     category = db.get(Category, payload.category_id)
     if category is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid category")
@@ -114,7 +114,7 @@ def create_product(payload: ProductCreate, db: Session = Depends(get_db), _=Depe
 
 
 @router.put("/{product_id}", response_model=ProductOut)
-def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), _=Depends(require_admin)):
+def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), _=Depends(require_admin), __=Depends(validate_csrf_token)):
     from app.models.product import Product
 
     product = db.get(Product, product_id)
@@ -157,7 +157,7 @@ def update_product(product_id: int, payload: ProductUpdate, db: Session = Depend
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_product(product_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+def delete_product(product_id: int, db: Session = Depends(get_db), _=Depends(require_admin), __=Depends(validate_csrf_token)):
     from app.models.product import Product
 
     product = db.get(Product, product_id)

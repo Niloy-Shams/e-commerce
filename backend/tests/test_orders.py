@@ -73,7 +73,14 @@ def test_get_order_other_user_denied(client, auth_headers_customer, db_session, 
     db_session.add(other)
     db_session.commit()
     db_session.refresh(other)
-    login = client.post("/api/v1/auth/login", json={"email": other.email, "password": "password123"})
+    csrf_resp = client.get("/api/v1/auth/csrf")
+    csrf_token = csrf_resp.json()["csrf_token"]
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": other.email, "password": "password123"},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert login.status_code == 200
     token = login.json()["access_token"]
     response = client.get(f"/api/v1/orders/{order.id}", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == status.HTTP_403_FORBIDDEN
